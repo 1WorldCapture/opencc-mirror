@@ -115,6 +115,7 @@ impl InstanceService {
             &instance_dir,
             &config_dir,
             &wrapper_path,
+            self.db.clone(),
         );
 
         match builder::build(build_ctx) {

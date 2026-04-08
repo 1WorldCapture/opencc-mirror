@@ -31,6 +31,8 @@ export interface CreateInstanceInput {
   base_url?: string;
   provider_key?: string;
   model_overrides?: ModelOverrides;
+  mcp_server_ids?: string[];
+  skill_ids?: string[];
 }
 
 export interface ProviderPreset {
@@ -45,4 +47,49 @@ export interface ProviderPreset {
   credential_optional: boolean;
   experimental: boolean;
   display_order: number;
+}
+
+export interface McpServerRow {
+  id: string;
+  name: string;
+  server_config: string;
+  description: string | null;
+  created_at: number;
+}
+
+export interface McpServerInput {
+  id: string;
+  name: string;
+  server_config: string;
+  description?: string;
+}
+
+export interface McpServerWithEnabled {
+  server: McpServerRow;
+  enabled: boolean;
+}
+
+export interface SkillRow {
+  id: string;
+  name: string;
+  description: string | null;
+  directory: string;
+  created_at: number;
+}
+
+export interface SkillInput {
+  id: string;
+  name: string;
+  description?: string;
+  directory: string;
+}
+
+export interface SkillWithEnabled {
+  skill: SkillRow;
+  enabled: boolean;
+}
+
+export interface InstanceIdEnabled {
+  id: string;
+  enabled: boolean;
 }

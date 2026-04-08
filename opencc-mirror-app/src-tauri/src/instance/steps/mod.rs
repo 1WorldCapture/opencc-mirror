@@ -1,5 +1,6 @@
 use serde_json::{json, Map, Value};
 
+use crate::database::dao::{get_enabled_mcp_configs, get_enabled_skill_dirs};
 use crate::instance::find_openclaude_binary;
 use crate::provider::{get_preset, build_env, BuildEnvParams};
 
@@ -38,11 +39,9 @@ pub fn write_config(ctx: &super::builder::BuildContext) -> Result<(), crate::err
             };
             build_env(params)?
         } else {
-            // Unknown provider key, use simple env
             build_simple_env(ctx)?
         }
     } else {
-        // No provider key, use simple env
         build_simple_env(ctx)?
     };
 
@@ -52,15 +51,89 @@ pub fn write_config(ctx: &super::builder::BuildContext) -> Result<(), crate::err
     let settings_str = serde_json::to_string_pretty(&settings)?;
     std::fs::write(&settings_path, settings_str)?;
 
-    // Write .claude.json (mark onboarding complete)
-    let claude_json = json!({
+    // Build .claude.json with MCP servers
+    let mut claude_json = json!({
         "hasCompletedOnboarding": true,
         "theme": "dark"
     });
+
+    // Fetch enabled MCP servers for this instance from DB
+    let instance_name = &ctx.input.name;
+    let mcp_configs = get_enabled_mcp_configs(&ctx.db, instance_name)?;
+    if !mcp_configs.is_empty() {
+        let mut mcp_servers = serde_json::Map::new();
+        for (name, config_str) in &mcp_configs {
+            if let Ok(config_value) = serde_json::from_str::<Value>(config_str) {
+                mcp_servers.insert(name.clone(), config_value);
+            }
+        }
+        if !mcp_servers.is_empty() {
+            claude_json.as_object_mut().unwrap()
+                .insert("mcpServers".into(), Value::Object(mcp_servers));
+        }
+    }
+
     let claude_json_path = ctx.config_dir.join(".claude.json");
     let claude_json_str = serde_json::to_string_pretty(&claude_json)?;
     std::fs::write(&claude_json_path, claude_json_str)?;
 
+    Ok(())
+}
+
+pub fn install_skills(ctx: &super::builder::BuildContext) -> Result<(), crate::error::AppError> {
+    let instance_name = &ctx.input.name;
+    let skill_dirs = get_enabled_skill_dirs(&ctx.db, instance_name)?;
+
+    if skill_dirs.is_empty() {
+        return Ok(());
+    }
+
+    let skills_dir = ctx.config_dir.join("skills");
+    std::fs::create_dir_all(&skills_dir)?;
+
+    for (skill_id, source_dir) in &skill_dirs {
+        let source = std::path::Path::new(source_dir);
+        if !source.exists() {
+            continue;
+        }
+        let target = skills_dir.join(skill_id);
+        // Remove existing symlink/dir
+        if target.exists() || target.is_symlink() {
+            if target.is_dir() && !target.is_symlink() {
+                std::fs::remove_dir_all(&target)?;
+            } else {
+                std::fs::remove_file(&target)?;
+            }
+        }
+        // Create symlink (Unix) or copy directory (fallback)
+        #[cfg(unix)]
+        {
+            if let Err(e) = std::os::unix::fs::symlink(source, &target) {
+                // Fallback: copy directory
+                copy_dir_recursive(source, &target)?;
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            copy_dir_recursive(source, &target)?;
+        }
+    }
+
+    Ok(())
+}
+
+fn copy_dir_recursive(src: &std::path::Path, dst: &std::path::Path) -> Result<(), crate::error::AppError> {
+    std::fs::create_dir_all(dst)?;
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+        if src_path.is_dir() {
+            copy_dir_recursive(&src_path, &dst_path)?;
+        } else {
+            std::fs::copy(&src_path, &dst_path)?;
+        }
+    }
     Ok(())
 }
 

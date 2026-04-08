@@ -1,6 +1,6 @@
 use tauri::State;
 
-use crate::database::dao::{CreateInstanceInput, InstanceRow};
+use crate::database::dao::*;
 use crate::error::AppError;
 use crate::instance::InstanceService;
 use crate::provider::ProviderPreset;
@@ -90,7 +90,120 @@ pub async fn list_provider_presets() -> Result<Vec<ProviderPreset>, AppError> {
     Ok(crate::provider::list_presets(false))
 }
 
+// --- MCP Server commands ---
+
 #[tauri::command]
-pub async fn list_all_provider_presets() -> Result<Vec<ProviderPreset>, AppError> {
-    Ok(crate::provider::list_presets(true))
+pub async fn list_mcp_servers(
+    state: State<'_, AppState>,
+) -> Result<Vec<McpServerRow>, AppError> {
+    crate::database::dao::list_mcp_servers(&state.db)
+}
+
+#[tauri::command]
+pub async fn upsert_mcp_server(
+    input: McpServerInput,
+    state: State<'_, AppState>,
+) -> Result<(), AppError> {
+    crate::database::dao::upsert_mcp_server(&state.db, &input)
+}
+
+#[tauri::command]
+pub async fn delete_mcp_server(
+    id: String,
+    state: State<'_, AppState>,
+) -> Result<(), AppError> {
+    crate::database::dao::delete_mcp_server(&state.db, &id)
+}
+
+#[tauri::command]
+pub async fn get_instance_mcp_servers(
+    instance_name: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<McpServerRowWithEnabled>, AppError> {
+    let rows = crate::database::dao::get_mcp_servers_for_instance(&state.db, &instance_name)?;
+    Ok(rows.into_iter().map(|(server, enabled)| McpServerRowWithEnabled {
+        server,
+        enabled,
+    }).collect())
+}
+
+#[tauri::command]
+pub async fn set_instance_mcp_servers(
+    instance_name: String,
+    servers: Vec<InstanceIdEnabled>,
+    state: State<'_, AppState>,
+) -> Result<(), AppError> {
+    let pairs: Vec<(String, bool)> = servers.iter()
+        .map(|s| (s.id.clone(), s.enabled))
+        .collect();
+    crate::database::dao::set_instance_mcp_servers(&state.db, &instance_name, &pairs)
+}
+
+// --- Skill commands ---
+
+#[tauri::command]
+pub async fn list_skills(
+    state: State<'_, AppState>,
+) -> Result<Vec<SkillRow>, AppError> {
+    crate::database::dao::list_skills(&state.db)
+}
+
+#[tauri::command]
+pub async fn upsert_skill(
+    input: SkillInput,
+    state: State<'_, AppState>,
+) -> Result<(), AppError> {
+    crate::database::dao::upsert_skill(&state.db, &input)
+}
+
+#[tauri::command]
+pub async fn delete_skill(
+    id: String,
+    state: State<'_, AppState>,
+) -> Result<(), AppError> {
+    crate::database::dao::delete_skill(&state.db, &id)
+}
+
+#[tauri::command]
+pub async fn get_instance_skills(
+    instance_name: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<SkillRowWithEnabled>, AppError> {
+    let rows = crate::database::dao::get_skills_for_instance(&state.db, &instance_name)?;
+    Ok(rows.into_iter().map(|(skill, enabled)| SkillRowWithEnabled {
+        skill,
+        enabled,
+    }).collect())
+}
+
+#[tauri::command]
+pub async fn set_instance_skills(
+    instance_name: String,
+    skills: Vec<InstanceIdEnabled>,
+    state: State<'_, AppState>,
+) -> Result<(), AppError> {
+    let pairs: Vec<(String, bool)> = skills.iter()
+        .map(|s| (s.id.clone(), s.enabled))
+        .collect();
+    crate::database::dao::set_instance_skills(&state.db, &instance_name, &pairs)
+}
+
+// --- Shared types for frontend ---
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct InstanceIdEnabled {
+    pub id: String,
+    pub enabled: bool,
+}
+
+#[derive(serde::Serialize)]
+pub struct McpServerRowWithEnabled {
+    pub server: McpServerRow,
+    pub enabled: bool,
+}
+
+#[derive(serde::Serialize)]
+pub struct SkillRowWithEnabled {
+    pub skill: SkillRow,
+    pub enabled: bool,
 }

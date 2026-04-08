@@ -29,6 +29,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            // Instances
             commands::create_instance,
             commands::remove_instance,
             commands::list_instances,
@@ -36,8 +37,20 @@ pub fn run() {
             commands::launch_instance,
             commands::check_openclaude_installed,
             commands::open_instance_folder,
+            // Providers
             commands::list_provider_presets,
-            commands::list_all_provider_presets,
+            // MCP Servers
+            commands::list_mcp_servers,
+            commands::upsert_mcp_server,
+            commands::delete_mcp_server,
+            commands::get_instance_mcp_servers,
+            commands::set_instance_mcp_servers,
+            // Skills
+            commands::list_skills,
+            commands::upsert_skill,
+            commands::delete_skill,
+            commands::get_instance_skills,
+            commands::set_instance_skills,
         ])
         .run(tauri::generate_context!())
         .expect("error while running OpenCC Mirror");

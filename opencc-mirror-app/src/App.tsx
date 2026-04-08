@@ -1,13 +1,15 @@
 import { useState } from "react";
-import { Box, Layers, Server } from "lucide-react";
+import { Box, Layers, Wrench } from "lucide-react";
 import InstanceList from "./components/InstanceList";
 import ProviderPage from "./components/ProviderPage";
+import SkillPage from "./components/SkillPage";
 
-type NavItem = "instances" | "providers";
+type NavItem = "instances" | "providers" | "skills";
 
 const NAV_ITEMS: { key: NavItem; label: string; icon: typeof Box }[] = [
   { key: "instances", label: "Instances", icon: Box },
   { key: "providers", label: "Providers", icon: Layers },
+  { key: "skills", label: "Skills", icon: Wrench },
 ];
 
 export default function App() {
@@ -15,7 +17,6 @@ export default function App() {
 
   return (
     <div className="flex h-screen bg-background">
-      {/* Sidebar */}
       <nav className="w-52 border-r flex flex-col py-4 px-3">
         <h1 className="text-sm font-bold px-3 mb-4 text-foreground">OpenCC Mirror</h1>
         <div className="space-y-1">
@@ -35,11 +36,10 @@ export default function App() {
           ))}
         </div>
       </nav>
-
-      {/* Main content */}
       <main className="flex-1 overflow-auto p-6">
         {activeNav === "instances" && <InstanceList />}
         {activeNav === "providers" && <ProviderPage />}
+        {activeNav === "skills" && <SkillPage />}
       </main>
     </div>
   );
