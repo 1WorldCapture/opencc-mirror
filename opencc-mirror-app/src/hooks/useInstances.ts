@@ -40,3 +40,10 @@ export function useCheckOpenclaude() {
     queryFn: api.checkOpenclaudeInstalled,
   });
 }
+
+export function useProviderPresets() {
+  return useQuery({
+    queryKey: ["provider-presets"],
+    queryFn: api.listProviderPresets,
+  });
+}

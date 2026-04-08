@@ -1,4 +1,7 @@
+use serde_json::{json, Map, Value};
+
 use crate::instance::find_openclaude_binary;
+use crate::provider::{get_preset, build_env, BuildEnvParams};
 
 pub fn prepare_dirs(ctx: &super::builder::BuildContext) -> Result<(), crate::error::AppError> {
     std::fs::create_dir_all(&ctx.instance_dir)?;
@@ -14,30 +17,37 @@ pub fn check_openclaude() -> Result<String, crate::error::AppError> {
 }
 
 pub fn write_config(ctx: &super::builder::BuildContext) -> Result<(), crate::error::AppError> {
-    use serde_json::{json, Map, Value};
+    // Build env map using provider preset + user overrides
+    let env = if let Some(ref provider_key) = ctx.input.provider_key {
+        if let Some(preset) = get_preset(provider_key) {
+            let model_overrides = ctx.input.model_overrides.clone().map(|m| crate::provider::ModelOverrides {
+                sonnet: m.sonnet,
+                opus: m.opus,
+                haiku: m.haiku,
+                small_fast: m.small_fast,
+                default_model: m.default_model,
+                subagent_model: m.subagent_model,
+            });
 
-    // Build env map
-    let mut env = Map::new();
-
-    if let Some(ref base_url) = ctx.input.base_url {
-        if !base_url.is_empty() {
-            env.insert("ANTHROPIC_BASE_URL".into(), Value::String(base_url.clone()));
+            let params = BuildEnvParams {
+                preset: &preset,
+                base_url: ctx.input.base_url.clone(),
+                api_key: ctx.input.api_key.clone(),
+                model_overrides,
+                extra_env: vec![],
+            };
+            build_env(params)?
+        } else {
+            // Unknown provider key, use simple env
+            build_simple_env(ctx)?
         }
-    }
-
-    if let Some(ref api_key) = ctx.input.api_key {
-        if !api_key.is_empty() {
-            env.insert("ANTHROPIC_API_KEY".into(), Value::String(api_key.clone()));
-        }
-    }
-
-    // Disable auto-updater since we manage instances
-    env.insert("DISABLE_AUTOUPDATER".into(), json!("1"));
+    } else {
+        // No provider key, use simple env
+        build_simple_env(ctx)?
+    };
 
     // Write settings.json
-    let settings = json!({
-        "env": Value::Object(env)
-    });
+    let settings = json!({ "env": Value::Object(env) });
     let settings_path = ctx.config_dir.join("settings.json");
     let settings_str = serde_json::to_string_pretty(&settings)?;
     std::fs::write(&settings_path, settings_str)?;
@@ -52,6 +62,22 @@ pub fn write_config(ctx: &super::builder::BuildContext) -> Result<(), crate::err
     std::fs::write(&claude_json_path, claude_json_str)?;
 
     Ok(())
+}
+
+fn build_simple_env(ctx: &super::builder::BuildContext) -> Result<Map<String, Value>, crate::error::AppError> {
+    let mut env = Map::new();
+    if let Some(ref base_url) = ctx.input.base_url {
+        if !base_url.is_empty() {
+            env.insert("ANTHROPIC_BASE_URL".into(), Value::String(base_url.clone()));
+        }
+    }
+    if let Some(ref api_key) = ctx.input.api_key {
+        if !api_key.is_empty() {
+            env.insert("ANTHROPIC_API_KEY".into(), Value::String(api_key.clone()));
+        }
+    }
+    env.insert("DISABLE_AUTOUPDATER".into(), json!("1"));
+    Ok(env)
 }
 
 pub fn write_wrapper(ctx: &super::builder::BuildContext, openclaude_path: &str) -> Result<(), crate::error::AppError> {

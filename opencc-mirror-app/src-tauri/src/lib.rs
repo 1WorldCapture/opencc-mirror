@@ -3,12 +3,11 @@ mod config;
 mod database;
 mod error;
 mod instance;
+mod provider;
 mod store;
 
-use store::AppState;
-
-#[cfg(desktop)]
 use tauri::Manager;
+use store::AppState;
 
 pub fn run() {
     tauri::Builder::default()
@@ -18,11 +17,9 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
-            // Ensure config directory exists
             config::ensure_config_dir()
                 .expect("Failed to create config directory");
 
-            // Open database
             let db_path = config::get_db_path();
             let db = database::Database::open(&db_path)
                 .expect("Failed to open database");
@@ -39,6 +36,8 @@ pub fn run() {
             commands::launch_instance,
             commands::check_openclaude_installed,
             commands::open_instance_folder,
+            commands::list_provider_presets,
+            commands::list_all_provider_presets,
         ])
         .run(tauri::generate_context!())
         .expect("error while running OpenCC Mirror");

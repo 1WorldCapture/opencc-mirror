@@ -4,6 +4,16 @@ use crate::database::Database;
 use crate::error::AppError;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelOverrides {
+    pub sonnet: Option<String>,
+    pub opus: Option<String>,
+    pub haiku: Option<String>,
+    pub small_fast: Option<String>,
+    pub default_model: Option<String>,
+    pub subagent_model: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InstanceRow {
     pub name: String,
     pub display_name: Option<String>,
@@ -13,6 +23,8 @@ pub struct InstanceRow {
     pub wrapper_path: String,
     pub api_key: Option<String>,
     pub base_url: Option<String>,
+    pub provider_key: Option<String>,
+    pub model_overrides: Option<ModelOverrides>,
     pub created_at: i64,
     pub updated_at: Option<i64>,
     pub last_launched_at: Option<i64>,
@@ -25,14 +37,52 @@ pub struct CreateInstanceInput {
     pub display_name: Option<String>,
     pub api_key: Option<String>,
     pub base_url: Option<String>,
+    pub provider_key: Option<String>,
+    pub model_overrides: Option<ModelOverrides>,
 }
 
-pub fn insert_instance(db: &Database, input: &CreateInstanceInput, instance_dir: &str, config_dir: &str, wrapper_path: &str) -> Result<(), AppError> {
+const INSTANCE_COLUMNS: &str = "name, display_name, status, instance_dir, config_dir, wrapper_path, api_key, base_url, provider_key, model_overrides, created_at, updated_at, last_launched_at, error_message";
+
+fn row_to_instance(row: &rusqlite::Row) -> rusqlite::Result<InstanceRow> {
+    let model_overrides_str: Option<String> = row.get(9)?;
+    let model_overrides = model_overrides_str
+        .as_deref()
+        .and_then(|s| serde_json::from_str(s).ok());
+
+    Ok(InstanceRow {
+        name: row.get(0)?,
+        display_name: row.get(1)?,
+        status: row.get(2)?,
+        instance_dir: row.get(3)?,
+        config_dir: row.get(4)?,
+        wrapper_path: row.get(5)?,
+        api_key: row.get(6)?,
+        base_url: row.get(7)?,
+        provider_key: row.get(8)?,
+        model_overrides,
+        created_at: row.get(10)?,
+        updated_at: row.get(11)?,
+        last_launched_at: row.get(12)?,
+        error_message: row.get(13)?,
+    })
+}
+
+pub fn insert_instance(
+    db: &Database,
+    input: &CreateInstanceInput,
+    instance_dir: &str,
+    config_dir: &str,
+    wrapper_path: &str,
+) -> Result<(), AppError> {
     let conn = db.conn()?;
     let now = chrono::Utc::now().timestamp();
+    let provider_key = input.provider_key.clone().unwrap_or_default();
+    let model_overrides_str = input.model_overrides.as_ref()
+        .map(|m| serde_json::to_string(m).unwrap_or_default())
+        .unwrap_or_else(|| "{}".into());
+
     conn.execute(
-        "INSERT INTO instances (name, display_name, status, instance_dir, config_dir, wrapper_path, api_key, base_url, created_at)
-         VALUES (?1, ?2, 'creating', ?3, ?4, ?5, ?6, ?7, ?8)",
+        &format!("INSERT INTO instances ({}) VALUES (?1, ?2, 'creating', ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, NULL, NULL, NULL)", INSTANCE_COLUMNS),
         rusqlite::params![
             input.name,
             input.display_name,
@@ -41,6 +91,8 @@ pub fn insert_instance(db: &Database, input: &CreateInstanceInput, instance_dir:
             wrapper_path,
             input.api_key,
             input.base_url,
+            provider_key,
+            model_overrides_str,
             now,
         ],
     )?;
@@ -59,25 +111,8 @@ pub fn update_instance_status(db: &Database, name: &str, status: &str, error_mes
 
 pub fn list_instances(db: &Database) -> Result<Vec<InstanceRow>, AppError> {
     let conn = db.conn()?;
-    let mut stmt = conn.prepare(
-        "SELECT name, display_name, status, instance_dir, config_dir, wrapper_path, api_key, base_url, created_at, updated_at, last_launched_at, error_message FROM instances ORDER BY created_at DESC"
-    )?;
-    let rows = stmt.query_map([], |row| {
-        Ok(InstanceRow {
-            name: row.get(0)?,
-            display_name: row.get(1)?,
-            status: row.get(2)?,
-            instance_dir: row.get(3)?,
-            config_dir: row.get(4)?,
-            wrapper_path: row.get(5)?,
-            api_key: row.get(6)?,
-            base_url: row.get(7)?,
-            created_at: row.get(8)?,
-            updated_at: row.get(9)?,
-            last_launched_at: row.get(10)?,
-            error_message: row.get(11)?,
-        })
-    })?;
+    let mut stmt = conn.prepare(&format!("SELECT {} FROM instances ORDER BY created_at DESC", INSTANCE_COLUMNS))?;
+    let rows = stmt.query_map([], row_to_instance)?;
     let mut result = Vec::new();
     for row in rows {
         result.push(row?);
@@ -87,25 +122,8 @@ pub fn list_instances(db: &Database) -> Result<Vec<InstanceRow>, AppError> {
 
 pub fn get_instance(db: &Database, name: &str) -> Result<Option<InstanceRow>, AppError> {
     let conn = db.conn()?;
-    let mut stmt = conn.prepare(
-        "SELECT name, display_name, status, instance_dir, config_dir, wrapper_path, api_key, base_url, created_at, updated_at, last_launched_at, error_message FROM instances WHERE name = ?1"
-    )?;
-    let mut rows = stmt.query_map([name], |row| {
-        Ok(InstanceRow {
-            name: row.get(0)?,
-            display_name: row.get(1)?,
-            status: row.get(2)?,
-            instance_dir: row.get(3)?,
-            config_dir: row.get(4)?,
-            wrapper_path: row.get(5)?,
-            api_key: row.get(6)?,
-            base_url: row.get(7)?,
-            created_at: row.get(8)?,
-            updated_at: row.get(9)?,
-            last_launched_at: row.get(10)?,
-            error_message: row.get(11)?,
-        })
-    })?;
+    let mut stmt = conn.prepare(&format!("SELECT {} FROM instances WHERE name = ?1", INSTANCE_COLUMNS))?;
+    let mut rows = stmt.query_map([name], row_to_instance)?;
     match rows.next() {
         Some(row) => Ok(Some(row?)),
         None => Ok(None),

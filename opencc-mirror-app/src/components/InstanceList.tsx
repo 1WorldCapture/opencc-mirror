@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useInstances, useRemoveInstance, useLaunchInstance, useCheckOpenclaude } from "../hooks/useInstances";
-import { openInstanceFolder } from "../lib/api/instances";
 import CreateInstanceDialog from "./CreateInstanceDialog";
-import { Plus, Trash2, Play, FolderOpen, Terminal, AlertCircle } from "lucide-react";
+import { Plus, Trash2, Play, FolderOpen, Terminal, AlertCircle, Layers } from "lucide-react";
+import type { InstanceRow } from "../lib/api/types";
+import { openInstanceFolder } from "../lib/api/instances";
 
 export default function InstanceList() {
   const { data: instances, isLoading } = useInstances();
@@ -17,7 +18,6 @@ export default function InstanceList() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Instances</h1>
@@ -34,20 +34,18 @@ export default function InstanceList() {
         </button>
       </div>
 
-      {/* OpenClaude not installed warning */}
       {isOpenclaudeInstalled === false && (
         <div className="flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
           <AlertCircle size={20} className="text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
           <div>
             <p className="font-medium text-amber-800 dark:text-amber-200">OpenClaude not detected</p>
             <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
-              Install it with: <code className="bg-amber-100 dark:bg-amber-900 px-1.5 py-0.5 rounded font-mono text-xs">npm install -g @gitlawb/openclaude</code>
+              Install: <code className="bg-amber-100 dark:bg-amber-900 px-1.5 py-0.5 rounded font-mono text-xs">npm install -g @gitlawb/openclaude</code>
             </p>
           </div>
         </div>
       )}
 
-      {/* Instance grid */}
       {instances && instances.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {instances.map((instance) => (
@@ -56,7 +54,7 @@ export default function InstanceList() {
               instance={instance}
               onLaunch={() => launchMutation.mutate(instance.name)}
               onRemove={() => {
-                if (confirm(`Remove instance "${instance.name}"? This cannot be undone.`)) {
+                if (confirm(`Remove instance "${instance.name}"?`)) {
                   removeMutation.mutate(instance.name);
                 }
               }}
@@ -72,18 +70,13 @@ export default function InstanceList() {
         </div>
       )}
 
-      {/* Create dialog */}
-      {showCreate && (
-        <CreateInstanceDialog
-          onClose={() => setShowCreate(false)}
-        />
-      )}
+      {showCreate && <CreateInstanceDialog onClose={() => setShowCreate(false)} />}
     </div>
   );
 }
 
 function InstanceCard({ instance, onLaunch, onRemove, onOpenFolder }: {
-  instance: any;
+  instance: InstanceRow;
   onLaunch: () => void;
   onRemove: () => void;
   onOpenFolder: (folder: string) => void;
@@ -94,11 +87,9 @@ function InstanceCard({ instance, onLaunch, onRemove, onOpenFolder }: {
     ? "bg-red-500"
     : "bg-yellow-500";
 
-  const statusLabel = instance.status === "ready"
-    ? "Ready"
-    : instance.status === "error"
-    ? "Error"
-    : "Creating...";
+  const providerLabel = instance.provider_key
+    ? instance.provider_key.charAt(0).toUpperCase() + instance.provider_key.slice(1)
+    : "Custom";
 
   return (
     <div className="border rounded-lg p-4 hover:border-primary/50 transition-colors">
@@ -107,7 +98,7 @@ function InstanceCard({ instance, onLaunch, onRemove, onOpenFolder }: {
           <div className={`w-2 h-2 rounded-full ${statusColor}`} />
           <h3 className="font-semibold">{instance.display_name || instance.name}</h3>
         </div>
-        <span className="text-xs text-muted-foreground">{statusLabel}</span>
+        <span className="text-xs text-muted-foreground">{providerLabel}</span>
       </div>
 
       {instance.base_url && (
@@ -145,7 +136,7 @@ function InstanceCard({ instance, onLaunch, onRemove, onOpenFolder }: {
       </div>
 
       <div className="mt-3 pt-3 border-t text-xs text-muted-foreground">
-        Run in terminal: <code className="bg-muted px-1.5 py-0.5 rounded font-mono">{instance.name}</code>
+        Run: <code className="bg-muted px-1.5 py-0.5 rounded font-mono">{instance.name}</code>
       </div>
     </div>
   );

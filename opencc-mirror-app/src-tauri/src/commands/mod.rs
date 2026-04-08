@@ -3,7 +3,10 @@ use tauri::State;
 use crate::database::dao::{CreateInstanceInput, InstanceRow};
 use crate::error::AppError;
 use crate::instance::InstanceService;
+use crate::provider::ProviderPreset;
 use crate::store::AppState;
+
+// --- Instance commands ---
 
 #[tauri::command]
 pub async fn create_instance(
@@ -50,17 +53,14 @@ pub async fn launch_instance(
 }
 
 #[tauri::command]
-pub async fn check_openclaude_installed(
-    state: State<'_, AppState>,
-) -> Result<bool, AppError> {
-    let service = InstanceService::new(state.db.clone());
-    Ok(service.check_openclaude_installed())
+pub async fn check_openclaude_installed() -> Result<bool, AppError> {
+    Ok(crate::instance::find_openclaude_binary().is_some())
 }
 
 #[tauri::command]
 pub async fn open_instance_folder(
     name: String,
-    folder: String, // "config" | "root"
+    folder: String,
     state: State<'_, AppState>,
 ) -> Result<(), AppError> {
     let service = InstanceService::new(state.db.clone());
@@ -81,4 +81,16 @@ pub async fn open_instance_folder(
     std::process::Command::new("explorer").arg(&path).spawn()?;
 
     Ok(())
+}
+
+// --- Provider commands ---
+
+#[tauri::command]
+pub async fn list_provider_presets() -> Result<Vec<ProviderPreset>, AppError> {
+    Ok(crate::provider::list_presets(false))
+}
+
+#[tauri::command]
+pub async fn list_all_provider_presets() -> Result<Vec<ProviderPreset>, AppError> {
+    Ok(crate::provider::list_presets(true))
 }
