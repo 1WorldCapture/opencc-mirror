@@ -59,6 +59,7 @@ pub fn delete_skill(db: &Database, id: &str) -> Result<(), AppError> {
     Ok(())
 }
 
+#[allow(dead_code)]
 pub fn get_skills_for_instance(db: &Database, instance_name: &str) -> Result<Vec<(SkillRow, bool)>, AppError> {
     let conn = db.conn()?;
     let mut stmt = conn.prepare(

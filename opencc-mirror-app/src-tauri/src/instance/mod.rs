@@ -154,6 +154,7 @@ impl InstanceService {
         list_instances(&self.db)
     }
 
+    #[allow(dead_code)]
     pub fn get(&self, name: &str) -> Result<Option<InstanceRow>, AppError> {
         get_instance(&self.db, name)
     }
@@ -212,6 +213,7 @@ impl InstanceService {
     }
 
     /// Check if openclaude is available in PATH
+    #[allow(dead_code)]
     pub fn check_openclaude_installed(&self) -> bool {
         find_openclaude_binary().is_some()
     }

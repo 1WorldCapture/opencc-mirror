@@ -13,6 +13,7 @@ pub enum AppError {
     #[error("Provider error: {0}")]
     Provider(String),
     #[error("Network error: {0}")]
+    #[allow(dead_code)]
     Network(String),
     #[error("Validation error: {0}")]
     Validation(String),

@@ -59,6 +59,7 @@ pub fn delete_mcp_server(db: &Database, id: &str) -> Result<(), AppError> {
     Ok(())
 }
 
+#[allow(dead_code)]
 pub fn get_mcp_servers_for_instance(db: &Database, instance_name: &str) -> Result<Vec<(McpServerRow, bool)>, AppError> {
     let conn = db.conn()?;
     let mut stmt = conn.prepare(
