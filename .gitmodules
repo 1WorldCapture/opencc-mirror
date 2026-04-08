@@ -1,0 +1,9 @@
+[submodule "openclaude"]
+	path = openclaude
+	url = https://github.com/Gitlawb/openclaude.git
+[submodule "cc-mirror"]
+	path = cc-mirror
+	url = https://github.com/numman-ali/cc-mirror.git
+[submodule "cc-switch"]
+	path = cc-switch
+	url = https://github.com/farion1231/cc-switch.git
