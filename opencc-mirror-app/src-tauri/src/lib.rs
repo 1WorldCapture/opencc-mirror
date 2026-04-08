@@ -5,8 +5,9 @@ mod error;
 mod instance;
 mod provider;
 mod store;
+mod tray;
 
-use tauri::Manager;
+use tauri::{Manager, WindowEvent};
 use store::AppState;
 
 pub fn run() {
@@ -25,28 +26,45 @@ pub fn run() {
                 .expect("Failed to open database");
 
             app.manage(AppState::new(db));
+
+            // Maximize and show the main window on launch
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.maximize();
+                let _ = window.show();
+            }
+
+            // On window close requested: hide to tray instead of quitting
+            if let Some(window) = app.get_webview_window("main") {
+                let window_clone = window.clone();
+                window.on_window_event(move |event| {
+                    if let WindowEvent::CloseRequested { api, .. } = event {
+                        api.prevent_close();
+                        let _ = window_clone.hide();
+                    }
+                });
+            }
+
+            // Setup system tray
+            tray::setup_tray(app);
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            // Instances
             commands::create_instance,
             commands::remove_instance,
             commands::list_instances,
             commands::launch_instance,
             commands::check_openclaude_installed,
             commands::open_instance_folder,
-            // Providers
             commands::list_providers,
             commands::get_provider,
             commands::add_provider,
             commands::update_provider,
             commands::delete_provider,
-            // MCP Servers
             commands::list_mcp_servers,
             commands::upsert_mcp_server,
             commands::delete_mcp_server,
             commands::set_instance_mcp_servers,
-            // Skills
             commands::list_skills,
             commands::upsert_skill,
             commands::delete_skill,
