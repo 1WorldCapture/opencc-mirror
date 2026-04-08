@@ -1,0 +1,45 @@
+[package]
+name = "opencc-mirror"
+version = "0.1.0"
+description = "Unified instance isolation + provider management for OpenClaude Code"
+license = "MIT"
+edition = "2021"
+rust-version = "1.85.0"
+
+[lib]
+name = "opencc_mirror_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+doctest = false
+
+[build-dependencies]
+tauri-build = { version = "2.4.0", features = [] }
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0", features = ["preserve_order"] }
+log = "0.4"
+chrono = { version = "0.4", features = ["serde"] }
+tauri = { version = "2.8.2", features = ["tray-icon"] }
+tauri-plugin-log = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-process = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-shell = "2"
+dirs = "5.0"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "sync"] }
+reqwest = { version = "0.12", features = ["rustls-tls", "json"] }
+rusqlite = { version = "0.31", features = ["bundled"] }
+thiserror = "2.0"
+anyhow = "1.0"
+uuid = { version = "1.11", features = ["v4"] }
+regex = "1.10"
+
+[target.'cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))'.dependencies]
+tauri-plugin-single-instance = "2"
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+opt-level = "s"
+panic = "unwind"
+strip = "symbols"
