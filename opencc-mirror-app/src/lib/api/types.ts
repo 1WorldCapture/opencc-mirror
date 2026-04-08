@@ -16,7 +16,8 @@ export interface InstanceRow {
   wrapper_path: string;
   api_key: string | null;
   base_url: string | null;
-  provider_key: string | null;
+  provider_id: string | null;
+  provider_name: string | null;
   model_overrides: ModelOverrides | null;
   created_at: number;
   updated_at: number | null;
@@ -29,24 +30,38 @@ export interface CreateInstanceInput {
   display_name?: string;
   api_key?: string;
   base_url?: string;
-  provider_key?: string;
+  provider_id?: string;
   model_overrides?: ModelOverrides;
   mcp_server_ids?: string[];
   skill_ids?: string[];
 }
 
-export interface ProviderPreset {
-  key: string;
-  label: string;
-  description: string;
-  base_url: string;
-  env: Record<string, string>;
-  api_key_label: string;
-  auth_mode: string;
-  requires_model_mapping: boolean;
-  credential_optional: boolean;
-  experimental: boolean;
-  display_order: number;
+export interface ProviderRow {
+  id: string;
+  name: string;
+  settings_config: string;
+  base_url: string | null;
+  api_key_field: string | null;
+  website_url: string | null;
+  category: string | null;
+  icon: string | null;
+  icon_color: string | null;
+  preset_key: string | null;
+  created_at: number;
+  updated_at: number | null;
+}
+
+export interface ProviderInput {
+  id?: string;
+  name: string;
+  settings_config: string;
+  base_url?: string;
+  api_key_field?: string;
+  website_url?: string;
+  category?: string;
+  icon?: string;
+  icon_color?: string;
+  preset_key?: string;
 }
 
 export interface McpServerRow {
@@ -64,11 +79,6 @@ export interface McpServerInput {
   description?: string;
 }
 
-export interface McpServerWithEnabled {
-  server: McpServerRow;
-  enabled: boolean;
-}
-
 export interface SkillRow {
   id: string;
   name: string;
@@ -82,11 +92,6 @@ export interface SkillInput {
   name: string;
   description?: string;
   directory: string;
-}
-
-export interface SkillWithEnabled {
-  skill: SkillRow;
-  enabled: boolean;
 }
 
 export interface InstanceIdEnabled {

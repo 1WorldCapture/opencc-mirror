@@ -87,9 +87,7 @@ function InstanceCard({ instance, onLaunch, onRemove, onOpenFolder }: {
     ? "bg-red-500"
     : "bg-yellow-500";
 
-  const providerLabel = instance.provider_key
-    ? instance.provider_key.charAt(0).toUpperCase() + instance.provider_key.slice(1)
-    : "Custom";
+  const providerLabel = instance.provider_name || instance.provider_id || "Custom";
 
   return (
     <div className="border rounded-lg p-4 hover:border-primary/50 transition-colors">

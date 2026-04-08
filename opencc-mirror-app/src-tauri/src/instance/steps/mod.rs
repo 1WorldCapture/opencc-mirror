@@ -1,8 +1,7 @@
 use serde_json::{json, Map, Value};
 
-use crate::database::dao::{get_enabled_mcp_configs, get_enabled_skill_dirs};
+use crate::database::dao::{get_enabled_mcp_configs, get_enabled_skill_dirs, get_provider};
 use crate::instance::find_openclaude_binary;
-use crate::provider::{get_preset, build_env, BuildEnvParams};
 
 pub fn prepare_dirs(ctx: &super::builder::BuildContext) -> Result<(), crate::error::AppError> {
     std::fs::create_dir_all(&ctx.instance_dir)?;
@@ -18,26 +17,24 @@ pub fn check_openclaude() -> Result<String, crate::error::AppError> {
 }
 
 pub fn write_config(ctx: &super::builder::BuildContext) -> Result<(), crate::error::AppError> {
-    // Build env map using provider preset + user overrides
-    let env = if let Some(ref provider_key) = ctx.input.provider_key {
-        if let Some(preset) = get_preset(provider_key) {
-            let model_overrides = ctx.input.model_overrides.clone().map(|m| crate::provider::ModelOverrides {
-                sonnet: m.sonnet,
-                opus: m.opus,
-                haiku: m.haiku,
-                small_fast: m.small_fast,
-                default_model: m.default_model,
-                subagent_model: m.subagent_model,
-            });
-
-            let params = BuildEnvParams {
-                preset: &preset,
-                base_url: ctx.input.base_url.clone(),
-                api_key: ctx.input.api_key.clone(),
-                model_overrides,
-                extra_env: vec![],
-            };
-            build_env(params)?
+    // Build env map: from provider's settings_config if available, otherwise from input fields
+    let env = if let Some(ref provider_id) = ctx.input.provider_id {
+        if let Some(provider) = get_provider(&ctx.db, provider_id)? {
+            // Parse provider's settings_config as the env object
+            let config: Value = serde_json::from_str(&provider.settings_config)
+                .unwrap_or_else(|_| json!({}));
+            if let Some(env_obj) = config.get("env").and_then(|e| e.as_object()) {
+                let mut env = env_obj.clone();
+                // Apply per-instance overrides
+                if let Some(ref base_url) = ctx.input.base_url {
+                    if !base_url.is_empty() {
+                        env.insert("ANTHROPIC_BASE_URL".into(), Value::String(base_url.clone()));
+                    }
+                }
+                env
+            } else {
+                build_simple_env(ctx)?
+            }
         } else {
             build_simple_env(ctx)?
         }
@@ -48,8 +45,7 @@ pub fn write_config(ctx: &super::builder::BuildContext) -> Result<(), crate::err
     // Write settings.json
     let settings = json!({ "env": Value::Object(env) });
     let settings_path = ctx.config_dir.join("settings.json");
-    let settings_str = serde_json::to_string_pretty(&settings)?;
-    std::fs::write(&settings_path, settings_str)?;
+    std::fs::write(&settings_path, serde_json::to_string_pretty(&settings)?)?;
 
     // Build .claude.json with MCP servers
     let mut claude_json = json!({
@@ -57,7 +53,6 @@ pub fn write_config(ctx: &super::builder::BuildContext) -> Result<(), crate::err
         "theme": "dark"
     });
 
-    // Fetch enabled MCP servers for this instance from DB
     let instance_name = &ctx.input.name;
     let mcp_configs = get_enabled_mcp_configs(&ctx.db, instance_name)?;
     if !mcp_configs.is_empty() {
@@ -74,8 +69,7 @@ pub fn write_config(ctx: &super::builder::BuildContext) -> Result<(), crate::err
     }
 
     let claude_json_path = ctx.config_dir.join(".claude.json");
-    let claude_json_str = serde_json::to_string_pretty(&claude_json)?;
-    std::fs::write(&claude_json_path, claude_json_str)?;
+    std::fs::write(&claude_json_path, serde_json::to_string_pretty(&claude_json)?)?;
 
     Ok(())
 }
@@ -83,21 +77,15 @@ pub fn write_config(ctx: &super::builder::BuildContext) -> Result<(), crate::err
 pub fn install_skills(ctx: &super::builder::BuildContext) -> Result<(), crate::error::AppError> {
     let instance_name = &ctx.input.name;
     let skill_dirs = get_enabled_skill_dirs(&ctx.db, instance_name)?;
-
-    if skill_dirs.is_empty() {
-        return Ok(());
-    }
+    if skill_dirs.is_empty() { return Ok(()); }
 
     let skills_dir = ctx.config_dir.join("skills");
     std::fs::create_dir_all(&skills_dir)?;
 
     for (skill_id, source_dir) in &skill_dirs {
         let source = std::path::Path::new(source_dir);
-        if !source.exists() {
-            continue;
-        }
+        if !source.exists() { continue; }
         let target = skills_dir.join(skill_id);
-        // Remove existing symlink/dir
         if target.exists() || target.is_symlink() {
             if target.is_dir() && !target.is_symlink() {
                 std::fs::remove_dir_all(&target)?;
@@ -105,20 +93,15 @@ pub fn install_skills(ctx: &super::builder::BuildContext) -> Result<(), crate::e
                 std::fs::remove_file(&target)?;
             }
         }
-        // Create symlink (Unix) or copy directory (fallback)
         #[cfg(unix)]
         {
-            if let Err(e) = std::os::unix::fs::symlink(source, &target) {
-                // Fallback: copy directory
+            if std::os::unix::fs::symlink(source, &target).is_err() {
                 copy_dir_recursive(source, &target)?;
             }
         }
         #[cfg(not(unix))]
-        {
-            copy_dir_recursive(source, &target)?;
-        }
+        { copy_dir_recursive(source, &target)?; }
     }
-
     Ok(())
 }
 
@@ -163,7 +146,6 @@ set -euo pipefail
 
 export CLAUDE_CONFIG_DIR="{config_dir}"
 
-# Load env from settings.json
 if command -v node >/dev/null 2>&1; then
   __ocm_env_file="$(mktemp)"
   node - <<'NODE' > "$__ocm_env_file" 2>/dev/null || true
@@ -200,13 +182,46 @@ exec {openclaude_path} "$@"
 
     std::fs::write(&ctx.wrapper_path, wrapper_content)?;
 
-    // Make executable (Unix)
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        let perms = std::fs::Permissions::from_mode(0o755);
-        std::fs::set_permissions(&ctx.wrapper_path, perms)?;
+        std::fs::set_permissions(&ctx.wrapper_path, std::fs::Permissions::from_mode(0o755))?;
     }
 
+    Ok(())
+}
+
+/// Re-sync an instance's settings.json from its provider's settings_config
+pub fn sync_instance_config(
+    config_dir: &std::path::Path,
+    provider_config: &str,
+    mcp_configs: &[(String, String)],
+) -> Result<(), crate::error::AppError> {
+    let config: Value = serde_json::from_str(provider_config).unwrap_or_else(|_| json!({}));
+    let env = config.get("env").and_then(|e| e.as_object()).cloned()
+        .unwrap_or_default();
+
+    let settings = json!({ "env": Value::Object(env) });
+    std::fs::write(config_dir.join("settings.json"), serde_json::to_string_pretty(&settings)?)?;
+
+    let mut claude_json: Value = if config_dir.join(".claude.json").exists() {
+        let existing = std::fs::read_to_string(config_dir.join(".claude.json"))?;
+        serde_json::from_str(&existing).unwrap_or_else(|_| json!({}))
+    } else {
+        json!({ "hasCompletedOnboarding": true, "theme": "dark" })
+    };
+
+    let mut mcp_servers = serde_json::Map::new();
+    for (name, config_str) in mcp_configs {
+        if let Ok(v) = serde_json::from_str::<Value>(config_str) {
+            mcp_servers.insert(name.clone(), v);
+        }
+    }
+    if !mcp_servers.is_empty() {
+        claude_json.as_object_mut().unwrap()
+            .insert("mcpServers".into(), Value::Object(mcp_servers));
+    }
+
+    std::fs::write(config_dir.join(".claude.json"), serde_json::to_string_pretty(&claude_json)?)?;
     Ok(())
 }

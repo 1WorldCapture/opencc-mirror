@@ -16,7 +16,6 @@ CREATE TABLE IF NOT EXISTS instances (
     last_launched_at INTEGER,
     error_message TEXT
 );
-
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT
@@ -36,7 +35,6 @@ CREATE TABLE IF NOT EXISTS mcp_servers (
     description TEXT,
     created_at INTEGER NOT NULL DEFAULT 0
 );
-
 CREATE TABLE IF NOT EXISTS skills (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -44,7 +42,6 @@ CREATE TABLE IF NOT EXISTS skills (
     directory TEXT NOT NULL,
     created_at INTEGER NOT NULL DEFAULT 0
 );
-
 CREATE TABLE IF NOT EXISTS instance_mcp_servers (
     instance_name TEXT NOT NULL,
     mcp_server_id TEXT NOT NULL,
@@ -52,7 +49,6 @@ CREATE TABLE IF NOT EXISTS instance_mcp_servers (
     PRIMARY KEY (instance_name, mcp_server_id),
     FOREIGN KEY (instance_name) REFERENCES instances(name) ON DELETE CASCADE
 );
-
 CREATE TABLE IF NOT EXISTS instance_skills (
     instance_name TEXT NOT NULL,
     skill_id TEXT NOT NULL,
@@ -60,6 +56,24 @@ CREATE TABLE IF NOT EXISTS instance_skills (
     PRIMARY KEY (instance_name, skill_id),
     FOREIGN KEY (instance_name) REFERENCES instances(name) ON DELETE CASCADE
 );
+"#;
+
+const MIGRATION_V4: &str = r#"
+CREATE TABLE IF NOT EXISTS providers (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    settings_config TEXT NOT NULL DEFAULT '{}',
+    base_url TEXT DEFAULT '',
+    api_key_field TEXT DEFAULT 'ANTHROPIC_AUTH_TOKEN',
+    website_url TEXT,
+    category TEXT DEFAULT 'custom',
+    icon TEXT,
+    icon_color TEXT,
+    preset_key TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER
+);
+ALTER TABLE instances ADD COLUMN provider_id TEXT DEFAULT '' REFERENCES providers(id);
 "#;
 
 fn has_table(conn: &rusqlite::Connection, table: &str) -> bool {
@@ -73,27 +87,32 @@ fn has_table(conn: &rusqlite::Connection, table: &str) -> bool {
     count > 0
 }
 
+fn has_column(conn: &rusqlite::Connection, table: &str, column: &str) -> bool {
+    let Ok(mut stmt) = conn.prepare(&format!("PRAGMA table_info({})", table)) else { return false };
+    let Ok(rows) = stmt.query_map([], |row| row.get::<_, String>(1)) else { return false };
+    let cols: Vec<String> = rows.filter_map(|r| r.ok()).collect();
+    cols.iter().any(|c| c == column)
+}
+
 pub fn run_migrations(db: &Database) -> Result<(), AppError> {
     let conn = db.conn()?;
 
-    // V1: base tables
+    // V1
     conn.execute_batch(SCHEMA_V1)?;
 
-    // V2: provider_key + model_overrides
-    let has_provider_key: bool = {
-        let mut stmt = conn.prepare("PRAGMA table_info(instances)")?;
-        let cols: Vec<String> = stmt.query_map([], |row| row.get(1))?
-            .filter_map(|r| r.ok())
-            .collect();
-        cols.iter().any(|c| c == "provider_key")
-    };
-    if !has_provider_key {
+    // V2
+    if !has_column(&conn, "instances", "provider_key") {
         conn.execute_batch(MIGRATION_V2)?;
     }
 
-    // V3: MCP + Skills tables
+    // V3
     if !has_table(&conn, "mcp_servers") {
         conn.execute_batch(MIGRATION_V3)?;
+    }
+
+    // V4
+    if !has_table(&conn, "providers") {
+        conn.execute_batch(MIGRATION_V4)?;
     }
 
     Ok(())

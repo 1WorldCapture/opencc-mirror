@@ -1,82 +1,36 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
-  CreateInstanceInput, InstanceRow, ProviderPreset,
-  McpServerRow, McpServerInput, McpServerWithEnabled,
-  SkillRow, SkillInput, SkillWithEnabled, InstanceIdEnabled,
+  CreateInstanceInput, InstanceRow,
+  ProviderRow, ProviderInput,
+  McpServerRow, McpServerInput,
+  SkillRow, SkillInput, InstanceIdEnabled,
 } from "./types";
 
 // --- Instances ---
-
-export async function listInstances(): Promise<InstanceRow[]> {
-  return invoke("list_instances");
-}
-
-export async function createInstance(input: CreateInstanceInput): Promise<InstanceRow> {
-  return invoke("create_instance", { input });
-}
-
-export async function removeInstance(name: string): Promise<void> {
-  return invoke("remove_instance", { name });
-}
-
-export async function launchInstance(name: string): Promise<void> {
-  return invoke("launch_instance", { name });
-}
-
-export async function checkOpenclaudeInstalled(): Promise<boolean> {
-  return invoke("check_openclaude_installed");
-}
-
-export async function openInstanceFolder(name: string, folder: string): Promise<void> {
-  return invoke("open_instance_folder", { name, folder });
-}
+export const listInstances = () => invoke<InstanceRow[]>("list_instances");
+export const createInstance = (input: CreateInstanceInput) => invoke<InstanceRow>("create_instance", { input });
+export const removeInstance = (name: string) => invoke<void>("remove_instance", { name });
+export const launchInstance = (name: string) => invoke<void>("launch_instance", { name });
+export const checkOpenclaudeInstalled = () => invoke<boolean>("check_openclaude_installed");
+export const openInstanceFolder = (name: string, folder: string) => invoke<void>("open_instance_folder", { name, folder });
 
 // --- Providers ---
-
-export async function listProviderPresets(): Promise<ProviderPreset[]> {
-  return invoke("list_provider_presets");
-}
+export const listProviders = () => invoke<ProviderRow[]>("list_providers");
+export const getProvider = (id: string) => invoke<ProviderRow | null>("get_provider", { id });
+export const addProvider = (input: ProviderInput) => invoke<ProviderRow>("add_provider", { input });
+export const updateProvider = (id: string, input: ProviderInput) => invoke<ProviderRow>("update_provider", { id, input });
+export const deleteProvider = (id: string) => invoke<void>("delete_provider", { id });
 
 // --- MCP Servers ---
-
-export async function listMcpServers(): Promise<McpServerRow[]> {
-  return invoke("list_mcp_servers");
-}
-
-export async function upsertMcpServer(input: McpServerInput): Promise<void> {
-  return invoke("upsert_mcp_server", { input });
-}
-
-export async function deleteMcpServer(id: string): Promise<void> {
-  return invoke("delete_mcp_server", { id });
-}
-
-export async function getInstanceMcpServers(instanceName: string): Promise<McpServerWithEnabled[]> {
-  return invoke("get_instance_mcp_servers", { instanceName });
-}
-
-export async function setInstanceMcpServers(instanceName: string, servers: InstanceIdEnabled[]): Promise<void> {
-  return invoke("set_instance_mcp_servers", { instanceName, servers });
-}
+export const listMcpServers = () => invoke<McpServerRow[]>("list_mcp_servers");
+export const upsertMcpServer = (input: McpServerInput) => invoke<void>("upsert_mcp_server", { input });
+export const deleteMcpServer = (id: string) => invoke<void>("delete_mcp_server", { id });
+export const setInstanceMcpServers = (instanceName: string, servers: InstanceIdEnabled[]) =>
+  invoke<void>("set_instance_mcp_servers", { instanceName, servers });
 
 // --- Skills ---
-
-export async function listSkills(): Promise<SkillRow[]> {
-  return invoke("list_skills");
-}
-
-export async function upsertSkill(input: SkillInput): Promise<void> {
-  return invoke("upsert_skill", { input });
-}
-
-export async function deleteSkill(id: string): Promise<void> {
-  return invoke("delete_skill", { id });
-}
-
-export async function getInstanceSkills(instanceName: string): Promise<SkillWithEnabled[]> {
-  return invoke("get_instance_skills", { instanceName });
-}
-
-export async function setInstanceSkills(instanceName: string, skills: InstanceIdEnabled[]): Promise<void> {
-  return invoke("set_instance_skills", { instanceName, skills });
-}
+export const listSkills = () => invoke<SkillRow[]>("list_skills");
+export const upsertSkill = (input: SkillInput) => invoke<void>("upsert_skill", { input });
+export const deleteSkill = (id: string) => invoke<void>("delete_skill", { id });
+export const setInstanceSkills = (instanceName: string, skills: InstanceIdEnabled[]) =>
+  invoke<void>("set_instance_skills", { instanceName, skills });
